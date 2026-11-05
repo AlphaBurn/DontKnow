@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Table</title>
+    <style>
+        :root { --bg-color: #121212; --text-color: #f5f5f5; --accent-green: #00e676; --card-bg: #1e1e1e; }
+        body { margin: 0; font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; align-items: center; padding: 20px; text-align: center; }
+        #tables-container { width: 100%; max-width: 500px; margin-bottom: 40px; }
+        .table-card { background: var(--card-bg); padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333; }
+        .beacon { display: inline-block; width: 12px; height: 12px; background-color: var(--accent-green); border-radius: 50%; margin-right: 8px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } }
+        h2 { font-size: 2rem; margin: 10px 0; }
+        .meta { color: #aaa; font-size: 1rem; margin: 5px 0; }
+        .highlight { font-size: 1.2rem; font-weight: bold; margin: 10px 0; }
+        #ping-section { background-color: var(--card-bg); padding: 25px; border-radius: 12px; width: 100%; max-width: 500px; box-sizing: border-box; }
+        input[type="text"] { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #333; border-radius: 6px; background: #2a2a2a; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; background-color: var(--text-color); color: var(--bg-color); border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="tables-container">
+        <!-- Jinja handles the first render before JS takes over -->
+        {% if tables %}
+            {% for t in tables %}
+            <div class="table-card">
+                <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                    <div class="beacon"></div>
+                    <span style="font-weight: bold; letter-spacing: 2px;">LIVE NOW</span>
+                </div>
+                <h2>WE ARE AT:<br><span style="color: var(--accent-green);">{{ t.location }}</span></h2>
+                <p class="meta">Hosted by {{ t.host_name }}</p>
+                <p class="highlight">👥 {{ t.people_count }} People</p>
+                {% if t.timeframe %}<p class="meta">⏱️ {{ t.timeframe }}</p>{% endif %}
+                {% if t.ongoing_game %}<p class="meta" style="color: #03a9f4;">🎮 Playing: {{ t.ongoing_game }}</p>{% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <h2 style="color: #757575;">All Tables Are Currently Closed</h2>
+        {% endif %}
+    </div>
+
+    <div id="ping-section" class="{% if has_pinged %}hidden{% endif %}">
+        <h3>Can't find us?</h3>
+        <p style="font-size: 0.9rem; color: #aaa;">Tell us where you are, and we'll come find you.</p>
+        <input type="text" id="ping-location" placeholder="e.g., By the lockers on 2nd floor">
+        <button id="ping-btn" onclick="sendPing()">Send SOS</button>
+        <p id="ping-msg" style="color: var(--accent-green); margin-top: 10px; font-size: 0.9rem;"></p>
+    </div>
+
+    <script>
+        function fetchStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('tables-container');
+                    
+                    if (data.tables.length === 0) {
+                        container.innerHTML = '<h2 style="color: #757575;">All Tables Are Currently Closed</h2>';
+                        return;
+                    }
+
+                    let html = '';
+                    data.tables.forEach(t => {
+                        html += `
+                        <div class="table-card">
+                            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                                <div class="beacon"></div>
+                                <span style="font-weight: bold; letter-spacing: 2px;">LIVE NOW</span>
+                            </div>
+                            <h2>WE ARE AT:<br><span style="color: #00e676;">${t.location}</span></h2>
+                            <p class="meta">Hosted by ${t.host_name}</p>
+                            <p class="highlight">👥 ${t.people_count} People</p>
+                            ${t.timeframe ? `<p class="meta">⏱️ ${t.timeframe}</p>` : ''}
+                            ${t.ongoing_game ? `<p class="meta" style="color: #03a9f4;">🎮 Playing: ${t.ongoing_game}</p>` : ''}
+                        </div>`;
+                    });
+                    container.innerHTML = html;
+                })
+                .catch(err => console.error("Error fetching status:", err));
+        }
+
+        setInterval(fetchStatus, 30000);
+
+        function sendPing() {
+            const btn = document.getElementById('ping-btn');
+            const locInput = document.getElementById('ping-location').value;
+            const msg = document.getElementById('ping-msg');
+
+            if (!locInput.trim()) {
+                msg.innerText = "Please enter a location.";
+                msg.style.color = "#ff5252";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Sending...";
+
+            fetch('/ping', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ location_description: locInput })
+            })
+            .then(response => {
+                if(response.ok) {
+                    document.getElementById('ping-section').innerHTML = "<h3 style='color: #00e676;'>Got it. We're on our way.</h3>";
+                } else {
+                    msg.innerText = "Failed to send. Try again in 10 minutes.";
+                    msg.style.color = "#ff5252";
+                    btn.disabled = false;
+                    btn.innerText = "Send SOS";
+                }
+            })
+            .catch(err => console.error(err));
+        }
+    </script>
+</body>
+</html>
