@@ -5,64 +5,109 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Open Table</title>
     <style>
-        :root { --bg: #121212; --txt: #f5f5f5; --card: #1e1e1e; --green: #00e676; --gold: #ffd700; --border: #333; }
-        body { margin: 0; font-family: sans-serif; background: var(--bg); color: var(--txt); padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 500px; }
+        :root { --bg: #121212; --txt: #f5f5f5; --card: #1e1e1e; --green: #00e676; --gold: #ffd700; --border: #333; --blue: #03a9f4; }
+        body { margin: 0; font-family: sans-serif; background: var(--bg); color: var(--txt); display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 500px; padding: 20px; box-sizing: border-box; }
+        
+        /* Profile Banner */
+        #profile-banner { background: #1a1a1a; width: 100%; padding: 15px; border-bottom: 2px solid var(--green); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
+        .stat-box { text-align: center; }
+        .stat-box span { display: block; font-size: 0.8rem; color: #aaa; text-transform: uppercase; }
+        .stat-box strong { font-size: 1.2rem; color: var(--txt); }
+
+        /* Tabs */
+        .tabs { display: flex; width: 100%; margin-bottom: 20px; background: var(--card); border-radius: 8px; overflow: hidden; }
+        .tab-btn { flex: 1; padding: 15px; text-align: center; cursor: pointer; font-weight: bold; background: transparent; border: none; color: #aaa; transition: 0.2s; }
+        .tab-btn.active { background: var(--border); color: var(--txt); border-bottom: 3px solid var(--green); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
         .card { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
-        .card:hover { border-color: #555; }
         .status-pill { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; margin-bottom: 10px; }
-        .Scheduled { background: #ff9800; color: #000; }
-        .Live { background: var(--green); color: #000; }
-        .Ended { background: #757575; color: #fff; }
-        .match-badge { border: 1px solid #03a9f4; color: #03a9f4; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+        .Scheduled { background: #ff9800; color: #000; } .Live { background: var(--green); color: #000; } .Ended { background: #757575; color: #fff; }
+        .match-badge { border: 1px solid var(--blue); color: var(--blue); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+        
         .details { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border); cursor: default; }
         .expanded .details { display: block; }
         
-        button { width: 100%; padding: 12px; background: var(--txt); color: var(--bg); border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        input { width: 100%; padding: 12px; margin: 15px 0; background: #2a2a2a; border: 1px solid var(--border); color: white; border-radius: 6px; box-sizing: border-box; }
+        button.action-btn { width: 100%; padding: 12px; background: var(--txt); color: var(--bg); border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button.undo-btn { background: transparent; border: 1px solid #ff5252; color: #ff5252; }
         
-        /* Modal */
-        #user-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100; }
-        .hidden { display: none !important; }
+        select.game-filter { width: 100%; padding: 12px; background: var(--card); border: 1px solid var(--border); color: white; border-radius: 6px; margin-bottom: 20px; font-weight: bold; }
         
         /* Leaderboard */
-        .ldb-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .ldb-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+        .ldb-rank { font-weight: bold; color: var(--gold); width: 30px; }
+        .ldb-pts { background: var(--border); padding: 4px 10px; border-radius: 12px; font-weight: bold; }
+
+        #user-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .hidden { display: none !important; }
+        input[type="text"] { width: 100%; padding: 12px; margin: 15px 0; background: #2a2a2a; border: 1px solid var(--border); color: white; border-radius: 6px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
     <div id="user-modal" class="{% if username %}hidden{% endif %}">
-        <div class="card" style="width: 80%; max-width: 350px;">
+        <div class="card" style="width: 80%; max-width: 350px; cursor: default;">
             <h3>Select Username</h3>
-            <p style="font-size: 0.9rem; color: #aaa;">This name is used for the leaderboard and joining tables. No password needed.</p>
-            <!-- Datalist Autocomplete integration -->
-            <input type="text" id="username-input" placeholder="e.g. oddvar123" list="user-suggestions" oninput="fetchUserSuggestions(this.value)" autocomplete="off">
-            <datalist id="user-suggestions"></datalist>
-            
-            <button onclick="setUsername()">Save & Enter</button>
+            <input type="text" id="username-input" placeholder="e.g. oddvar123" list="users-suggestions" oninput="fetchSuggestions('users', this.value)" autocomplete="off">
+            <datalist id="users-suggestions"></datalist>
+            <button class="action-btn" onclick="setUsername()">Save & Enter</button>
+        </div>
+    </div>
+
+    <!-- Bold Profile Stats -->
+    <div id="profile-banner" class="hidden">
+        <div>
+            <div style="color: #aaa; font-size: 0.8rem;">Signed in as</div>
+            <div style="font-weight: bold; font-size: 1.2rem; color: var(--green);" id="prof-name"></div>
+        </div>
+        <div style="display: flex; gap: 15px;">
+            <div class="stat-box"><span>Rank</span><strong id="prof-rank"></strong></div>
+            <div class="stat-box"><span>Points</span><strong id="prof-pts"></strong></div>
+            <div class="stat-box"><span>W/L</span><strong id="prof-wl"></strong></div>
         </div>
     </div>
 
     <div class="container">
-        <h2 style="text-align: center;">Open Tables</h2>
-        <div id="tables-container"></div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tables-tab', this)">Tables</button>
+            <button class="tab-btn" onclick="switchTab('leaderboard-tab', this)">Leaderboards</button>
+        </div>
+
+        <!-- Tables Tab -->
+        <div id="tables-tab" class="tab-content active">
+            <div id="tables-container"></div>
+        </div>
         
-        <h2 style="text-align: center; margin-top: 40px; color: var(--gold);">🏆 Leaderboard</h2>
-        <div class="card" id="leaderboard-container"></div>
+        <!-- Leaderboard Tab -->
+        <div id="leaderboard-tab" class="tab-content">
+            <select id="game-filter" class="game-filter" onchange="renderLeaderboard()"></select>
+            <div class="card" id="leaderboard-container"></div>
+        </div>
     </div>
 
     <script>
         let expandedTableId = null;
-        let pollingData = { tables: [], leaderboard: [] };
+        let pollingData = { tables: [], leaderboards: { "Global": [] }, user_stats: null };
+        const currentUsername = "{{ username }}";
 
-        function fetchUserSuggestions(query) {
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        function fetchSuggestions(resource, query) {
             if (query.length < 1) return;
-            fetch(`/api/users/search?q=${query}`)
+            fetch(`/api/search/${resource}?q=${query}`)
                 .then(res => res.json())
-                .then(users => {
-                    const dl = document.getElementById('user-suggestions');
-                    dl.innerHTML = users.map(u => `<option value="${u}">`).join('');
-                });
+                .then(items => {
+                    const dl = document.getElementById(`${resource}-suggestions`);
+                    dl.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
+                })
+                .catch(err => console.error("Autocomplete fetch error:", err));
         }
 
         function setUsername() {
@@ -72,81 +117,102 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: val })
-            }).then(() => {
-                document.getElementById('user-modal').classList.add('hidden');
-                fetchData();
-            });
+            }).then(() => location.reload()); 
         }
 
         function toggleExpand(id, event) {
             if(event.target.tagName === 'BUTTON') return;
             expandedTableId = expandedTableId === id ? null : id;
-            render();
+            renderTables();
         }
 
         function joinTable(id) {
             fetch(`/join_table/${id}`, { method: 'POST' }).then(() => fetchData());
         }
 
-        function render() {
+        function renderTables() {
             const tCont = document.getElementById('tables-container');
-            const lCont = document.getElementById('leaderboard-container');
-
             if (pollingData.tables.length === 0) {
-                tCont.innerHTML = '<p style="text-align:center; color:#757575;">No tables scheduled.</p>';
-            } else {
-                tCont.innerHTML = pollingData.tables.map(t => {
-                    const statClass = t.timing_status === "Live Now" ? "Live" : t.timing_status;
-                    const isExpanded = expandedTableId === t.id ? 'expanded' : '';
-                    
-                    return `
-                    <div class="card ${isExpanded}" onclick="toggleExpand(${t.id}, event)">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                            <div>
-                                <span class="status-pill ${statClass}">${t.timing_status}</span>
-                                <h3 style="margin: 5px 0;">${t.location}</h3>
-                                <div style="color: #aaa; font-size: 0.9rem;">${t.time_range}</div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div class="match-badge">${t.match_state}</div>
-                                <div style="margin-top: 5px; font-weight: bold; color: var(--green);">👥 ${t.present.length}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="details">
-                            <h4 style="color:#03a9f4; margin:0 0 10px 0;">🎮 ${t.ongoing_game}</h4>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <strong>At Table:</strong><br>
-                                <span style="color:#aaa;">${t.present.join(', ') || 'No one yet'}</span>
-                            </div>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <strong>Interested:</strong><br>
-                                <span style="color:#aaa;">${t.interested.join(', ') || 'None'}</span>
-                            </div>
-                            
-                            <button onclick="joinTable(${t.id})" style="background:var(--green); color:black;">I'm Interested</button>
-                        </div>
-                    </div>`;
-                }).join('');
+                tCont.innerHTML = '<p style="text-align:center; color:#757575;">No tables active right now.</p>';
+                return;
             }
+            
+            tCont.innerHTML = pollingData.tables.map(t => {
+                const statClass = t.timing_status === "Live Now" ? "Live" : t.timing_status;
+                const isExpanded = expandedTableId === t.id ? 'expanded' : '';
+                const isInterested = t.interested.includes(currentUsername);
+                
+                const btnHtml = isInterested 
+                    ? `<button class="action-btn undo-btn" onclick="joinTable(${t.id})">Remove Interest</button>`
+                    : `<button class="action-btn" style="background:var(--green); color:black;" onclick="joinTable(${t.id})">I'm Interested</button>`;
 
-            lCont.innerHTML = pollingData.leaderboard.map((u, i) => `
+                return `
+                <div class="card ${isExpanded}" onclick="toggleExpand(${t.id}, event)">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <span class="status-pill ${statClass}">${t.timing_status}</span>
+                            <h3 style="margin: 5px 0;">${t.location}</h3>
+                            <div style="color: #aaa; font-size: 0.9rem;">${t.time_range}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="match-badge">${t.match_state}</div>
+                            <div style="margin-top: 5px; font-weight: bold; color: var(--green);">👥 ${t.present.length}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="details">
+                        <h4 style="color:var(--blue); margin:0 0 10px 0;">🎮 ${t.ongoing_game}</h4>
+                        <div style="margin-bottom: 10px;"><strong>At Table:</strong><br><span style="color:#aaa;">${t.present.join(', ') || 'No one yet'}</span></div>
+                        <div style="margin-bottom: 15px;"><strong>Interested:</strong><br><span style="color:#aaa;">${t.interested.join(', ') || 'None'}</span></div>
+                        ${btnHtml}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderLeaderboard() {
+            const lCont = document.getElementById('leaderboard-container');
+            const filter = document.getElementById('game-filter');
+            
+            const currentSelection = filter.value || "Global";
+            filter.innerHTML = Object.keys(pollingData.leaderboards).map(g => 
+                `<option value="${g}" ${g === currentSelection ? 'selected' : ''}>${g} Rankings</option>`
+            ).join('');
+            
+            const activeData = pollingData.leaderboards[filter.value] || [];
+            
+            lCont.innerHTML = activeData.map((u, i) => `
                 <div class="ldb-row">
-                    <div><strong>${i+1}. ${u.username}</strong></div>
-                    <div style="color:#aaa;">
-                        <span style="color:var(--green);">${u.wins} W</span> / 
-                        <span style="color:#ff5252;">${u.losses} L</span>
+                    <div style="display:flex; align-items:center; gap: 10px;">
+                        <span class="ldb-rank">#${i+1}</span>
+                        <strong>${u.username}</strong>
+                    </div>
+                    <div style="display:flex; align-items:center; gap: 15px;">
+                        <div style="color:#aaa; font-size:0.9rem;">
+                            <span style="color:var(--green);">${u.wins}W</span> - <span style="color:#ff5252;">${u.losses}L</span>
+                        </div>
+                        <div class="ldb-pts">${u.points} pts</div>
                     </div>
                 </div>
             `).join('');
         }
 
+        function renderProfile() {
+            if (pollingData.user_stats) {
+                document.getElementById('profile-banner').classList.remove('hidden');
+                document.getElementById('prof-name').innerText = currentUsername;
+                document.getElementById('prof-rank').innerText = "#" + pollingData.user_stats.rank;
+                document.getElementById('prof-pts').innerText = pollingData.user_stats.points;
+                document.getElementById('prof-wl').innerText = pollingData.user_stats.wl_ratio;
+            }
+        }
+
         function fetchData() {
             fetch('/api/status').then(r => r.json()).then(data => {
                 pollingData = data;
-                render();
+                renderProfile();
+                renderTables();
+                renderLeaderboard();
             });
         }
 

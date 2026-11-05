@@ -9,6 +9,27 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     wins = db.Column(db.Integer, default=0)
     losses = db.Column(db.Integer, default=0)
+    points = db.Column(db.Integer, default=0)
+
+class UserGameStat(db.Model):
+    __tablename__ = 'user_game_stat'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    game_name = db.Column(db.String(100), nullable=False)
+    wins = db.Column(db.Integer, default=0)
+    losses = db.Column(db.Integer, default=0)
+    points = db.Column(db.Integer, default=0)
+    user = db.relationship('User', backref=db.backref('game_stats', lazy=True))
+
+class UniqueLocation(db.Model):
+    __tablename__ = 'unique_location'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+
+class UniqueGame(db.Model):
+    __tablename__ = 'unique_game'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
 
 class TableStatus(db.Model):
     __tablename__ = 'table_status'
@@ -19,9 +40,8 @@ class TableStatus(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
     ongoing_game = db.Column(db.String(100), nullable=True)
-    match_state = db.Column(db.String(20), default="Waiting") # 'Waiting' or 'Ongoing'
+    match_state = db.Column(db.String(20), default="Waiting")
     
-    # Cascade deletes attendees if table is closed
     attendees = db.relationship('TableAttendee', backref='table', lazy=True, cascade="all, delete-orphan")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -30,7 +50,7 @@ class TableAttendee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     table_id = db.Column(db.Integer, db.ForeignKey('table_status.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    status = db.Column(db.String(20), default='interested') # 'interested' or 'present'
+    status = db.Column(db.String(20), default='interested')
     user = db.relationship('User')
 
 class AnonymousPing(db.Model):

@@ -41,12 +41,15 @@
         <div class="card">
             <h3>Schedule New Table</h3>
             <form method="POST" action="/admin/add_table">
-                <input type="text" name="location" placeholder="Location (e.g. 2nd Floor Lounge)" required>
-                <!-- Datalist Autocomplete integration -->
-                <input type="text" name="host_name" placeholder="Host/Founder Name" list="admin-user-suggestions" oninput="fetchUserSuggestions(this.value)" autocomplete="off" required>
-                <datalist id="admin-user-suggestions"></datalist>
+                <input type="text" name="location" placeholder="Location (e.g. 2nd Floor Lounge)" list="locations-suggestions" oninput="fetchSuggestions('locations', this.value)" autocomplete="off" required>
+                <datalist id="locations-suggestions"></datalist>
+
+                <input type="text" name="host_name" placeholder="Host/Founder Name" list="users-suggestions" oninput="fetchSuggestions('users', this.value)" autocomplete="off" required>
+                <datalist id="users-suggestions"></datalist>
                 
-                <input type="text" name="ongoing_game" placeholder="Game to Play (e.g. Uno, Poker)" required>
+                <input type="text" name="ongoing_game" placeholder="Game to Play (e.g. Uno, Poker)" list="games-suggestions" oninput="fetchSuggestions('games', this.value)" autocomplete="off" required>
+                <datalist id="games-suggestions"></datalist>
+                
                 <div style="display: flex; gap: 10px;">
                     <div style="width:50%;">
                         <label style="font-size:0.8rem; color:#aaa;">Start Time</label>
@@ -73,7 +76,7 @@
                 </form>
             </div>
 
-            <!-- Match Control Panel -->
+            <!-- Single Unified Match Control Panel -->
             <div class="att-list" style="border: 1px solid var(--border);">
                 {% if table.match_state == 'Waiting' %}
                     <form method="POST" action="/admin/table/{{ table.id }}/match">
@@ -83,16 +86,16 @@
                 {% else %}
                     <form method="POST" action="/admin/table/{{ table.id }}/match" style="display:flex; flex-direction: column;">
                         <input type="hidden" name="action" value="end">
-                        <div style="font-size: 0.9rem; margin-bottom: 8px;">Select Winner(s):</div>
-                        <div class="checkbox-container">
+                        <div style="font-size: 0.9rem; margin-bottom: 8px;">Assign Placements (1st, 2nd, 3rd...):</div>
+                        <div style="background: #2a2a2a; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid var(--border);">
                             {% for att in table.attendees %}{% if att.status == 'present' %}
-                                <label>
-                                    <input type="checkbox" name="winner_names" value="{{ att.user.username }}">
-                                    {{ att.user.username }}
-                                </label>
+                                <div class="flex-row" style="padding: 5px 0;">
+                                    <span style="font-weight: bold;">{{ att.user.username }}</span>
+                                    <input type="number" name="placement_{{ att.user.id }}" min="1" max="{{ table.attendees|length }}" placeholder="Place" required style="width: 80px; margin: 0;">
+                                </div>
                             {% endif %}{% endfor %}
                         </div>
-                        <button type="submit" class="btn-danger" style="width: 100%;">Assign Win(s) + End Round</button>
+                        <button type="submit" class="btn-danger" style="width: 100%;">Calculate Points & End Round</button>
                     </form>
                 {% endif %}
             </div>
@@ -150,14 +153,15 @@
     </div>
 
     <script>
-        function fetchUserSuggestions(query) {
+        function fetchSuggestions(resource, query) {
             if (query.length < 1) return;
-            fetch(`/api/users/search?q=${query}`)
+            fetch(`/api/search/${resource}?q=${query}`)
                 .then(res => res.json())
-                .then(users => {
-                    const dl = document.getElementById('admin-user-suggestions');
-                    dl.innerHTML = users.map(u => `<option value="${u}">`).join('');
-                });
+                .then(items => {
+                    const dl = document.getElementById(`${resource}-suggestions`);
+                    dl.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
+                })
+                .catch(err => console.error("Autocomplete fetch error:", err));
         }
     </script>
 </body>
