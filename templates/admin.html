@@ -16,6 +16,8 @@
         .btn-danger { background: transparent; border: 1px solid #ff5252; color: #ff5252; }
         .flex-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding: 10px 0; }
         .att-list { margin-top: 10px; background: #111; padding: 10px; border-radius: 6px; }
+        .checkbox-container { max-height: 120px; overflow-y: auto; background: #2a2a2a; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid var(--border); }
+        .checkbox-container label { display: block; padding: 5px 0; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -40,7 +42,10 @@
             <h3>Schedule New Table</h3>
             <form method="POST" action="/admin/add_table">
                 <input type="text" name="location" placeholder="Location (e.g. 2nd Floor Lounge)" required>
-                <input type="text" name="host_name" placeholder="Host/Founder Name" required>
+                <!-- Datalist Autocomplete integration -->
+                <input type="text" name="host_name" placeholder="Host/Founder Name" list="admin-user-suggestions" oninput="fetchUserSuggestions(this.value)" autocomplete="off" required>
+                <datalist id="admin-user-suggestions"></datalist>
+                
                 <input type="text" name="ongoing_game" placeholder="Game to Play (e.g. Uno, Poker)" required>
                 <div style="display: flex; gap: 10px;">
                     <div style="width:50%;">
@@ -76,15 +81,18 @@
                         <button type="submit" class="btn-blue" style="width:100%;">Begin Round</button>
                     </form>
                 {% else %}
-                    <form method="POST" action="/admin/table/{{ table.id }}/match" style="display:flex; gap:10px;">
+                    <form method="POST" action="/admin/table/{{ table.id }}/match" style="display:flex; flex-direction: column;">
                         <input type="hidden" name="action" value="end">
-                        <select name="winner_name" required style="margin:0;">
-                            <option value="" disabled selected>Select Round Winner...</option>
+                        <div style="font-size: 0.9rem; margin-bottom: 8px;">Select Winner(s):</div>
+                        <div class="checkbox-container">
                             {% for att in table.attendees %}{% if att.status == 'present' %}
-                                <option value="{{ att.user.username }}">{{ att.user.username }}</option>
+                                <label>
+                                    <input type="checkbox" name="winner_names" value="{{ att.user.username }}">
+                                    {{ att.user.username }}
+                                </label>
                             {% endif %}{% endfor %}
-                        </select>
-                        <button type="submit" class="btn-danger" style="white-space:nowrap;">Assign Win + End Round</button>
+                        </div>
+                        <button type="submit" class="btn-danger" style="width: 100%;">Assign Win(s) + End Round</button>
                     </form>
                 {% endif %}
             </div>
@@ -126,7 +134,6 @@
                 </div>
             </div>
 
-            <!-- Manually Force Add a User -->
             <form method="POST" action="/admin/table/{{ table.id }}/manual_add" style="display: flex; gap: 10px; margin-top: 15px;">
                 <select name="user_id" style="margin:0;" required>
                     <option value="" disabled selected>Force Add Player from Database...</option>
@@ -139,8 +146,19 @@
 
         </div>
         {% endfor %}
-
         {% endif %}
     </div>
+
+    <script>
+        function fetchUserSuggestions(query) {
+            if (query.length < 1) return;
+            fetch(`/api/users/search?q=${query}`)
+                .then(res => res.json())
+                .then(users => {
+                    const dl = document.getElementById('admin-user-suggestions');
+                    dl.innerHTML = users.map(u => `<option value="${u}">`).join('');
+                });
+        }
+    </script>
 </body>
 </html>

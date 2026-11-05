@@ -52,6 +52,17 @@ def set_username():
         return jsonify({"status": "success"})
     return jsonify({"status": "error"}), 400
 
+@app.route('/api/users/search', methods=['GET'])
+def search_users():
+    """Returns a list of usernames matching the search query for autocomplete."""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify([])
+    
+    # ilike handles case-insensitive matching, allowing 'arna' to find 'ArnarXD'
+    users = User.query.filter(User.username.ilike(f"{q}%")).limit(10).all()
+    return jsonify([u.username for u in users])
+
 @app.route('/api/status', methods=['GET'])
 def get_status():
     tables = TableStatus.query.filter_by(is_active=True).all()
@@ -113,15 +124,28 @@ def add_table():
     start_dt = datetime.strptime(f"{today} {request.form.get('start_time')}", "%Y-%m-%d %H:%M")
     end_dt = datetime.strptime(f"{today} {request.form.get('end_time')}", "%Y-%m-%d %H:%M")
     
+    # Ensure the host exists in the User DB so their stats track properly if they play
+    host_name = request.form.get('host_name').strip()
+    host_user = User.query.filter_by(username=host_name).first()
+    if not host_user:
+        db.session.add(User(username=host_name))
+        db.session.commit()
+    
     new_table = TableStatus(
         location=request.form.get('location'),
-        host_name=request.form.get('host_name'),
+        host_name=host_name,
         start_time=start_dt,
         end_time=end_dt,
         ongoing_game=request.form.get('ongoing_game')
     )
     db.session.add(new_table)
     db.session.commit()
+    
+    # Automatically add the host to the table as 'present'
+    host_user = User.query.filter_by(username=host_name).first()
+    db.session.add(TableAttendee(table_id=new_table.id, user_id=host_user.id, status='present'))
+    db.session.commit()
+    
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/attendee/<int:att_id>/<action>', methods=['POST'])
@@ -157,11 +181,12 @@ def match_state(table_id):
     if action == 'start':
         table.match_state = "Ongoing"
     elif action == 'end':
-        winner_name = request.form.get('winner_name')
+        # Handles 1 winner, multiple winners (ties/co-op), or 0 winners
+        winner_names = request.form.getlist('winner_names')
         attendees = [a for a in table.attendees if a.status == 'present']
         
         for att in attendees:
-            if att.user.username == winner_name:
+            if att.user.username in winner_names:
                 att.user.wins += 1
             else:
                 att.user.losses += 1

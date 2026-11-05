@@ -35,7 +35,10 @@
         <div class="card" style="width: 80%; max-width: 350px;">
             <h3>Select Username</h3>
             <p style="font-size: 0.9rem; color: #aaa;">This name is used for the leaderboard and joining tables. No password needed.</p>
-            <input type="text" id="username-input" placeholder="e.g. oddvar123">
+            <!-- Datalist Autocomplete integration -->
+            <input type="text" id="username-input" placeholder="e.g. oddvar123" list="user-suggestions" oninput="fetchUserSuggestions(this.value)" autocomplete="off">
+            <datalist id="user-suggestions"></datalist>
+            
             <button onclick="setUsername()">Save & Enter</button>
         </div>
     </div>
@@ -52,6 +55,16 @@
         let expandedTableId = null;
         let pollingData = { tables: [], leaderboard: [] };
 
+        function fetchUserSuggestions(query) {
+            if (query.length < 1) return;
+            fetch(`/api/users/search?q=${query}`)
+                .then(res => res.json())
+                .then(users => {
+                    const dl = document.getElementById('user-suggestions');
+                    dl.innerHTML = users.map(u => `<option value="${u}">`).join('');
+                });
+        }
+
         function setUsername() {
             const val = document.getElementById('username-input').value.trim();
             if (!val) return;
@@ -66,7 +79,6 @@
         }
 
         function toggleExpand(id, event) {
-            // Prevent toggling if clicking a button inside the card
             if(event.target.tagName === 'BUTTON') return;
             expandedTableId = expandedTableId === id ? null : id;
             render();
@@ -139,7 +151,7 @@
         }
 
         fetchData();
-        setInterval(fetchData, 15000); // 15 seconds for tighter game loops
+        setInterval(fetchData, 15000);
     </script>
 </body>
 </html>
