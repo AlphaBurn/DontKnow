@@ -5,117 +5,141 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Open Table</title>
     <style>
-        :root { --bg-color: #121212; --text-color: #f5f5f5; --accent-green: #00e676; --card-bg: #1e1e1e; }
-        body { margin: 0; font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; align-items: center; padding: 20px; text-align: center; }
-        #tables-container { width: 100%; max-width: 500px; margin-bottom: 40px; }
-        .table-card { background: var(--card-bg); padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333; }
-        .beacon { display: inline-block; width: 12px; height: 12px; background-color: var(--accent-green); border-radius: 50%; margin-right: 8px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } }
-        h2 { font-size: 2rem; margin: 10px 0; }
-        .meta { color: #aaa; font-size: 1rem; margin: 5px 0; }
-        .highlight { font-size: 1.2rem; font-weight: bold; margin: 10px 0; }
-        #ping-section { background-color: var(--card-bg); padding: 25px; border-radius: 12px; width: 100%; max-width: 500px; box-sizing: border-box; }
-        input[type="text"] { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #333; border-radius: 6px; background: #2a2a2a; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 14px; background-color: var(--text-color); color: var(--bg-color); border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+        :root { --bg: #121212; --txt: #f5f5f5; --card: #1e1e1e; --green: #00e676; --gold: #ffd700; --border: #333; }
+        body { margin: 0; font-family: sans-serif; background: var(--bg); color: var(--txt); padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 500px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
+        .card:hover { border-color: #555; }
+        .status-pill { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; margin-bottom: 10px; }
+        .Scheduled { background: #ff9800; color: #000; }
+        .Live { background: var(--green); color: #000; }
+        .Ended { background: #757575; color: #fff; }
+        .match-badge { border: 1px solid #03a9f4; color: #03a9f4; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+        .details { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border); cursor: default; }
+        .expanded .details { display: block; }
+        
+        button { width: 100%; padding: 12px; background: var(--txt); color: var(--bg); border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        input { width: 100%; padding: 12px; margin: 15px 0; background: #2a2a2a; border: 1px solid var(--border); color: white; border-radius: 6px; box-sizing: border-box; }
+        
+        /* Modal */
+        #user-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100; }
         .hidden { display: none !important; }
+        
+        /* Leaderboard */
+        .ldb-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
     </style>
 </head>
 <body>
 
-    <div id="tables-container">
-        <!-- Jinja handles the first render before JS takes over -->
-        {% if tables %}
-            {% for t in tables %}
-            <div class="table-card">
-                <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-                    <div class="beacon"></div>
-                    <span style="font-weight: bold; letter-spacing: 2px;">LIVE NOW</span>
-                </div>
-                <h2>WE ARE AT:<br><span style="color: var(--accent-green);">{{ t.location }}</span></h2>
-                <p class="meta">Hosted by {{ t.host_name }}</p>
-                <p class="highlight">👥 {{ t.people_count }} People</p>
-                {% if t.timeframe %}<p class="meta">⏱️ {{ t.timeframe }}</p>{% endif %}
-                {% if t.ongoing_game %}<p class="meta" style="color: #03a9f4;">🎮 Playing: {{ t.ongoing_game }}</p>{% endif %}
-            </div>
-            {% endfor %}
-        {% else %}
-            <h2 style="color: #757575;">All Tables Are Currently Closed</h2>
-        {% endif %}
+    <div id="user-modal" class="{% if username %}hidden{% endif %}">
+        <div class="card" style="width: 80%; max-width: 350px;">
+            <h3>Select Username</h3>
+            <p style="font-size: 0.9rem; color: #aaa;">This name is used for the leaderboard and joining tables. No password needed.</p>
+            <input type="text" id="username-input" placeholder="e.g. oddvar123">
+            <button onclick="setUsername()">Save & Enter</button>
+        </div>
     </div>
 
-    <div id="ping-section" class="{% if has_pinged %}hidden{% endif %}">
-        <h3>Can't find us?</h3>
-        <p style="font-size: 0.9rem; color: #aaa;">Tell us where you are, and we'll come find you.</p>
-        <input type="text" id="ping-location" placeholder="e.g., By the lockers on 2nd floor">
-        <button id="ping-btn" onclick="sendPing()">Send SOS</button>
-        <p id="ping-msg" style="color: var(--accent-green); margin-top: 10px; font-size: 0.9rem;"></p>
+    <div class="container">
+        <h2 style="text-align: center;">Open Tables</h2>
+        <div id="tables-container"></div>
+        
+        <h2 style="text-align: center; margin-top: 40px; color: var(--gold);">🏆 Leaderboard</h2>
+        <div class="card" id="leaderboard-container"></div>
     </div>
 
     <script>
-        function fetchStatus() {
-            fetch('/api/status')
-                .then(response => response.json())
-                .then(data => {
-                    const container = document.getElementById('tables-container');
-                    
-                    if (data.tables.length === 0) {
-                        container.innerHTML = '<h2 style="color: #757575;">All Tables Are Currently Closed</h2>';
-                        return;
-                    }
+        let expandedTableId = null;
+        let pollingData = { tables: [], leaderboard: [] };
 
-                    let html = '';
-                    data.tables.forEach(t => {
-                        html += `
-                        <div class="table-card">
-                            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-                                <div class="beacon"></div>
-                                <span style="font-weight: bold; letter-spacing: 2px;">LIVE NOW</span>
-                            </div>
-                            <h2>WE ARE AT:<br><span style="color: #00e676;">${t.location}</span></h2>
-                            <p class="meta">Hosted by ${t.host_name}</p>
-                            <p class="highlight">👥 ${t.people_count} People</p>
-                            ${t.timeframe ? `<p class="meta">⏱️ ${t.timeframe}</p>` : ''}
-                            ${t.ongoing_game ? `<p class="meta" style="color: #03a9f4;">🎮 Playing: ${t.ongoing_game}</p>` : ''}
-                        </div>`;
-                    });
-                    container.innerHTML = html;
-                })
-                .catch(err => console.error("Error fetching status:", err));
-        }
-
-        setInterval(fetchStatus, 30000);
-
-        function sendPing() {
-            const btn = document.getElementById('ping-btn');
-            const locInput = document.getElementById('ping-location').value;
-            const msg = document.getElementById('ping-msg');
-
-            if (!locInput.trim()) {
-                msg.innerText = "Please enter a location.";
-                msg.style.color = "#ff5252";
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerText = "Sending...";
-
-            fetch('/ping', {
+        function setUsername() {
+            const val = document.getElementById('username-input').value.trim();
+            if (!val) return;
+            fetch('/set_username', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ location_description: locInput })
-            })
-            .then(response => {
-                if(response.ok) {
-                    document.getElementById('ping-section').innerHTML = "<h3 style='color: #00e676;'>Got it. We're on our way.</h3>";
-                } else {
-                    msg.innerText = "Failed to send. Try again in 10 minutes.";
-                    msg.style.color = "#ff5252";
-                    btn.disabled = false;
-                    btn.innerText = "Send SOS";
-                }
-            })
-            .catch(err => console.error(err));
+                body: JSON.stringify({ username: val })
+            }).then(() => {
+                document.getElementById('user-modal').classList.add('hidden');
+                fetchData();
+            });
         }
+
+        function toggleExpand(id, event) {
+            // Prevent toggling if clicking a button inside the card
+            if(event.target.tagName === 'BUTTON') return;
+            expandedTableId = expandedTableId === id ? null : id;
+            render();
+        }
+
+        function joinTable(id) {
+            fetch(`/join_table/${id}`, { method: 'POST' }).then(() => fetchData());
+        }
+
+        function render() {
+            const tCont = document.getElementById('tables-container');
+            const lCont = document.getElementById('leaderboard-container');
+
+            if (pollingData.tables.length === 0) {
+                tCont.innerHTML = '<p style="text-align:center; color:#757575;">No tables scheduled.</p>';
+            } else {
+                tCont.innerHTML = pollingData.tables.map(t => {
+                    const statClass = t.timing_status === "Live Now" ? "Live" : t.timing_status;
+                    const isExpanded = expandedTableId === t.id ? 'expanded' : '';
+                    
+                    return `
+                    <div class="card ${isExpanded}" onclick="toggleExpand(${t.id}, event)">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div>
+                                <span class="status-pill ${statClass}">${t.timing_status}</span>
+                                <h3 style="margin: 5px 0;">${t.location}</h3>
+                                <div style="color: #aaa; font-size: 0.9rem;">${t.time_range}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="match-badge">${t.match_state}</div>
+                                <div style="margin-top: 5px; font-weight: bold; color: var(--green);">👥 ${t.present.length}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="details">
+                            <h4 style="color:#03a9f4; margin:0 0 10px 0;">🎮 ${t.ongoing_game}</h4>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <strong>At Table:</strong><br>
+                                <span style="color:#aaa;">${t.present.join(', ') || 'No one yet'}</span>
+                            </div>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <strong>Interested:</strong><br>
+                                <span style="color:#aaa;">${t.interested.join(', ') || 'None'}</span>
+                            </div>
+                            
+                            <button onclick="joinTable(${t.id})" style="background:var(--green); color:black;">I'm Interested</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            lCont.innerHTML = pollingData.leaderboard.map((u, i) => `
+                <div class="ldb-row">
+                    <div><strong>${i+1}. ${u.username}</strong></div>
+                    <div style="color:#aaa;">
+                        <span style="color:var(--green);">${u.wins} W</span> / 
+                        <span style="color:#ff5252;">${u.losses} L</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function fetchData() {
+            fetch('/api/status').then(r => r.json()).then(data => {
+                pollingData = data;
+                render();
+            });
+        }
+
+        fetchData();
+        setInterval(fetchData, 15000); // 15 seconds for tighter game loops
     </script>
 </body>
 </html>
