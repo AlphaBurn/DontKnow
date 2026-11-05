@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Open Table</title>
+    <style>
+        :root { --bg: #121212; --txt: #f5f5f5; --card: #1e1e1e; --border: #333; --green: #00e676; --blue: #03a9f4; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--txt); margin: 0; padding: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border); }
+        input, select { width: 100%; padding: 10px; margin: 5px 0 15px; background: #2a2a2a; border: 1px solid var(--border); color: white; box-sizing: border-box; }
+        button { background: var(--txt); color: var(--bg); border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-small { padding: 4px 8px; margin-left: 5px; font-size: 0.8rem; }
+        .btn-green { background: var(--green); color: black; }
+        .btn-blue { background: var(--blue); color: black; }
+        .btn-danger { background: transparent; border: 1px solid #ff5252; color: #ff5252; }
+        .flex-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding: 10px 0; }
+        .att-list { margin-top: 10px; background: #111; padding: 10px; border-radius: 6px; }
+        .checkbox-container { max-height: 120px; overflow-y: auto; background: #2a2a2a; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid var(--border); }
+        .checkbox-container label { display: block; padding: 5px 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div style="max-width: 800px; margin: 0 auto;">
+        
+        {% if not session.get('logged_in') %}
+        <div class="card" style="margin-top: 20vh;">
+            <h2>Founders Login</h2>
+            <form method="POST" action="/admin/login">
+                <input type="password" name="password" placeholder="Access Password" required>
+                <button type="submit" style="width: 100%;">Unlock</button>
+            </form>
+        </div>
+        {% else %}
+        
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Control Panel</h2>
+            <a href="/admin/logout" style="color: #aaa;">Logout</a>
+        </div>
+
+        <div class="card">
+            <h3>Schedule New Table</h3>
+            <form method="POST" action="/admin/add_table">
+                <input type="text" name="location" placeholder="Location (e.g. 2nd Floor Lounge)" list="locations-suggestions" oninput="fetchSuggestions('locations', this.value)" autocomplete="off" required>
+                <datalist id="locations-suggestions"></datalist>
+
+                <input type="text" name="host_name" placeholder="Host/Founder Name" list="users-suggestions" oninput="fetchSuggestions('users', this.value)" autocomplete="off" required>
+                <datalist id="users-suggestions"></datalist>
+                
+                <input type="text" name="ongoing_game" placeholder="Game to Play (e.g. Uno, Poker)" list="games-suggestions" oninput="fetchSuggestions('games', this.value)" autocomplete="off" required>
+                <datalist id="games-suggestions"></datalist>
+                
+                <div style="display: flex; gap: 10px;">
+                    <div style="width:50%;">
+                        <label style="font-size:0.8rem; color:#aaa;">Start Time</label>
+                        <input type="time" name="start_time" required>
+                    </div>
+                    <div style="width:50%;">
+                        <label style="font-size:0.8rem; color:#aaa;">End Time</label>
+                        <input type="time" name="end_time" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-green" style="width: 100%;">Deploy Table</button>
+            </form>
+        </div>
+
+        {% for table in tables %}
+        <div class="card" style="border-left: 4px solid var(--blue);">
+            <div class="flex-row" style="border:none;">
+                <div>
+                    <h3 style="margin: 0; color: var(--green);">{{ table.location }}</h3>
+                    <div style="color: #aaa; font-size: 0.9rem;">Game: {{ table.ongoing_game }} | State: <strong>{{ table.match_state }}</strong></div>
+                </div>
+                <form method="POST" action="/admin/table/{{ table.id }}/close">
+                    <button type="submit" class="btn-danger">End & Close Table</button>
+                </form>
+            </div>
+
+            <!-- Single Unified Match Control Panel -->
+            <div class="att-list" style="border: 1px solid var(--border);">
+                {% if table.match_state == 'Waiting' %}
+                    <form method="POST" action="/admin/table/{{ table.id }}/match">
+                        <input type="hidden" name="action" value="start">
+                        <button type="submit" class="btn-blue" style="width:100%;">Begin Round</button>
+                    </form>
+                {% else %}
+                    <form method="POST" action="/admin/table/{{ table.id }}/match" style="display:flex; flex-direction: column;">
+                        <input type="hidden" name="action" value="end">
+                        <div style="font-size: 0.9rem; margin-bottom: 8px;">Assign Placements (1st, 2nd, 3rd...):</div>
+                        <div style="background: #2a2a2a; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid var(--border);">
+                            {% for att in table.attendees %}{% if att.status == 'present' %}
+                                <div class="flex-row" style="padding: 5px 0;">
+                                    <span style="font-weight: bold;">{{ att.user.username }}</span>
+                                    <input type="number" name="placement_{{ att.user.id }}" min="1" max="{{ table.attendees|length }}" placeholder="Place" required style="width: 80px; margin: 0;">
+                                </div>
+                            {% endif %}{% endfor %}
+                        </div>
+                        <button type="submit" class="btn-danger" style="width: 100%;">Calculate Points & End Round</button>
+                    </form>
+                {% endif %}
+            </div>
+
+            <div style="display:flex; gap: 20px; margin-top: 15px;">
+                <!-- Interested Users -->
+                <div style="flex:1;">
+                    <strong style="color: #ff9800;">Interested:</strong>
+                    <div class="att-list">
+                        {% for att in table.attendees %}{% if att.status == 'interested' %}
+                        <div class="flex-row" style="padding: 5px 0;">
+                            <span>{{ att.user.username }}</span>
+                            <div>
+                                <form method="POST" action="/admin/attendee/{{ att.id }}/accept" style="display:inline;">
+                                    <button type="submit" class="btn-small btn-green">Present</button>
+                                </form>
+                                <form method="POST" action="/admin/attendee/{{ att.id }}/remove" style="display:inline;">
+                                    <button type="submit" class="btn-small btn-danger">X</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endif %}{% endfor %}
+                    </div>
+                </div>
+
+                <!-- Present Users -->
+                <div style="flex:1;">
+                    <strong style="color: var(--green);">At Table:</strong>
+                    <div class="att-list">
+                        {% for att in table.attendees %}{% if att.status == 'present' %}
+                        <div class="flex-row" style="padding: 5px 0;">
+                            <span>{{ att.user.username }}</span>
+                            <form method="POST" action="/admin/attendee/{{ att.id }}/remove" style="display:inline;">
+                                <button type="submit" class="btn-small btn-danger">Remove</button>
+                            </form>
+                        </div>
+                        {% endif %}{% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <form method="POST" action="/admin/table/{{ table.id }}/manual_add" style="display: flex; gap: 10px; margin-top: 15px;">
+                <select name="user_id" style="margin:0;" required>
+                    <option value="" disabled selected>Force Add Player from Database...</option>
+                    {% for u in all_users %}
+                        <option value="{{ u.id }}">{{ u.username }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn-small">Add</button>
+            </form>
+
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    <script>
+        function fetchSuggestions(resource, query) {
+            if (query.length < 1) return;
+            fetch(`/api/search/${resource}?q=${query}`)
+                .then(res => res.json())
+                .then(items => {
+                    const dl = document.getElementById(`${resource}-suggestions`);
+                    dl.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
+                })
+                .catch(err => console.error("Autocomplete fetch error:", err));
+        }
+    </script>
+</body>
+</html>
