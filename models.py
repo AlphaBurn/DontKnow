@@ -59,3 +59,24 @@ class AnonymousPing(db.Model):
     location_description = db.Column(db.String(200), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     resolved = db.Column(db.Boolean, default=False)
+
+class TableComment(db.Model):
+    __tablename__ = 'table_comment'
+    id = db.Column(db.Integer, primary_key=True)
+    table_id = db.Column(db.Integer, db.ForeignKey('table_status.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    message = db.Column(db.String(255), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('comments', lazy=True, cascade="all, delete-orphan"))
+    table = db.relationship('TableStatus', backref=db.backref('comments', lazy=True, cascade="all, delete-orphan"))
+    votes = db.relationship('CommentVote', backref='comment', lazy=True, cascade="all, delete-orphan")
+
+class CommentVote(db.Model):
+    __tablename__ = 'comment_vote'
+    id = db.Column(db.Integer, primary_key=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('table_comment.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    vote_type = db.Column(db.String(10), nullable=False) # 'like' or 'dislike'
+    
+    __table_args__ = (db.UniqueConstraint('comment_id', 'user_id', name='unique_comment_user_vote'),)

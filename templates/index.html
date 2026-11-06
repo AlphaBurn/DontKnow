@@ -9,11 +9,14 @@
         body { margin: 0; font-family: sans-serif; background: var(--bg); color: var(--txt); display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 500px; padding: 20px; box-sizing: border-box; }
         
-        /* Profile Banner */
-        #profile-banner { background: #1a1a1a; width: 100%; padding: 15px; border-bottom: 2px solid var(--green); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
         .stat-box { text-align: center; }
         .stat-box span { display: block; font-size: 0.8rem; color: #aaa; text-transform: uppercase; }
         .stat-box strong { font-size: 1.2rem; color: var(--txt); }
+
+        /* Dropdown Menu Items */
+        .dropdown-item { padding: 12px 15px; border-bottom: 1px solid var(--border); color: var(--txt); text-decoration: none; display: block; cursor: pointer; }
+        .dropdown-item:last-child { border-bottom: none; }
+        .dropdown-item:hover { background: #2a2a2a; }
 
         /* Tabs */
         .tabs { display: flex; width: 100%; margin-bottom: 20px; background: var(--card); border-radius: 8px; overflow: hidden; }
@@ -40,14 +43,15 @@
         .ldb-rank { font-weight: bold; color: var(--gold); width: 30px; }
         .ldb-pts { background: var(--border); padding: 4px 10px; border-radius: 12px; font-weight: bold; }
 
-        #user-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100; }
         .hidden { display: none !important; }
         input[type="text"] { width: 100%; padding: 12px; margin: 15px 0; background: #2a2a2a; border: 1px solid var(--border); color: white; border-radius: 6px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
-    <div id="user-modal" class="{% if username %}hidden{% endif %}">
+    <!-- Username Selection Modal -->
+    <div id="user-modal" class="modal-overlay {% if username %}hidden{% endif %}">
         <div class="card" style="width: 80%; max-width: 350px; cursor: default;">
             <h3>Select Username</h3>
             <input type="text" id="username-input" placeholder="e.g. oddvar123" list="users-suggestions" oninput="fetchSuggestions('users', this.value)" autocomplete="off">
@@ -56,16 +60,44 @@
         </div>
     </div>
 
-    <!-- Bold Profile Stats -->
-    <div id="profile-banner" class="hidden">
-        <div>
-            <div style="color: #aaa; font-size: 0.8rem;">Signed in as</div>
-            <div style="font-weight: bold; font-size: 1.2rem; color: var(--green);" id="prof-name"></div>
+    <!-- User Profile Data Modal -->
+    <!-- User Profile Data Modal -->
+    <div id="profile-modal" class="modal-overlay hidden">
+        <div class="card" style="width: 90%; max-width: 400px; cursor: default; position: relative; max-height: 85vh; overflow-y: auto;">
+            <button onclick="closeProfileModal()" style="position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: #aaa; font-size: 1.2rem; width: auto; padding: 0; cursor: pointer;">✖</button>
+            <h2 style="margin-top: 0; color: var(--green); text-align: center;" id="modal-prof-name"></h2>
+            <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
+                <div class="stat-box"><span>Rank</span><strong id="prof-rank"></strong></div>
+                <div class="stat-box"><span>Points</span><strong id="prof-pts"></strong></div>
+                <div class="stat-box"><span>W/L</span><strong id="prof-wl"></strong></div>
+            </div>
+            
+            <div style="margin-top: 25px;">
+                <h4 style="border-bottom: 1px solid var(--border); padding-bottom: 5px; color: var(--blue);">Recent Comments</h4>
+                <div id="prof-comments-list" style="font-size: 0.85rem; color: #aaa; max-height: 200px; overflow-y: auto;">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
         </div>
-        <div style="display: flex; gap: 15px;">
-            <div class="stat-box"><span>Rank</span><strong id="prof-rank"></strong></div>
-            <div class="stat-box"><span>Points</span><strong id="prof-pts"></strong></div>
-            <div class="stat-box"><span>W/L</span><strong id="prof-wl"></strong></div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <div id="main-navbar" class="hidden" style="width: 100%; padding: 15px 20px; background: #1a1a1a; border-bottom: 2px solid var(--green); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+        <div style="position: relative; cursor: pointer;" onclick="toggleDropdown(event)">
+            <div style="color: #aaa; font-size: 0.8rem;">Signed in as</div>
+            <div style="font-weight: bold; font-size: 1.2rem; color: var(--green);">
+                <span id="nav-prof-name"></span> ▼
+            </div>
+            
+            <!-- Dropdown Menu -->
+            <div id="user-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: var(--card); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-top: 10px; z-index: 50; width: 150px; box-shadow: 0 4px 6px rgba(0,0,0,0.5);">
+                <div class="dropdown-item" onclick="openProfileModal()">👤 Profile</div>
+                <a href="/user_logout" class="dropdown-item" style="color: #ff5252;">🚪 Sign Out</a>
+            </div>
+        </div>
+        
+        <div>
+            <a href="/admin" style="color: #aaa; text-decoration: none; font-size: 0.9rem; font-weight: bold; padding: 5px;">⚙️ Admin</a>
         </div>
     </div>
 
@@ -91,6 +123,28 @@
         let expandedTableId = null;
         let pollingData = { tables: [], leaderboards: { "Global": [] }, user_stats: null };
         const currentUsername = "{{ username }}";
+
+        // Dropdown and Modal Logic
+        function toggleDropdown(e) {
+            e.stopPropagation();
+            const drop = document.getElementById('user-dropdown');
+            drop.style.display = drop.style.display === 'block' ? 'none' : 'block';
+        }
+
+        window.addEventListener('click', () => {
+            const drop = document.getElementById('user-dropdown');
+            if (drop && drop.style.display === 'block') {
+                drop.style.display = 'none';
+            }
+        });
+
+        function openProfileModal() {
+            document.getElementById('profile-modal').classList.remove('hidden');
+        }
+
+        function closeProfileModal() {
+            document.getElementById('profile-modal').classList.add('hidden');
+        }
 
         function switchTab(tabId, btn) {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -121,7 +175,10 @@
         }
 
         function toggleExpand(id, event) {
-            if(event.target.tagName === 'BUTTON') return;
+            // Ignore clicks if the user clicked a button, an input text field, or inside the comment container
+            if (event.target.tagName === 'BUTTON' || event.target.tagName === 'INPUT' || event.target.closest('.comment-section')) {
+                return;
+            }
             expandedTableId = expandedTableId === id ? null : id;
             renderTables();
         }
@@ -165,6 +222,32 @@
                         <div style="margin-bottom: 10px;"><strong>At Table:</strong><br><span style="color:#aaa;">${t.present.join(', ') || 'No one yet'}</span></div>
                         <div style="margin-bottom: 15px;"><strong>Interested:</strong><br><span style="color:#aaa;">${t.interested.join(', ') || 'None'}</span></div>
                         ${btnHtml}
+                        <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
+                            <h5 style="margin: 0 0 10px 0; color: var(--txt);">💬 Table Discussion</h5>
+                            <div style="max-height: 200px; overflow-y: auto; margin-bottom: 10px;" id="comments-list-${t.id}">
+                                ${t.comments.map(c => `
+                                    <div style="background: #151515; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border);">
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #888; margin-bottom: 4px;">
+                                            <span style="font-weight: bold; color: var(--green);">@${c.username}</span>
+                                            <span>${c.time}</span>
+                                        </div>
+                                        <div style="font-size: 0.95krem; word-break: break-word; margin-bottom: 6px;">${c.message}</div>
+                                        <div style="display: flex; gap: 10px; font-size: 0.8rem;">
+                                            <button onclick="voteComment(${c.id}, 'like')" style="background:none; border:none; color:${c.user_vote === 'like' ? 'var(--green)' : '#aaa'}; cursor:pointer; padding:0;">
+                                                👍 ${c.likes}
+                                            </button>
+                                            <button onclick="voteComment(${c.id}, 'dislike')" style="background:none; border:none; color:${c.user_vote === 'dislike' ? '#ff5252' : '#aaa'}; cursor:pointer; padding:0;">
+                                                👎 ${c.dislikes}
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('') || '<p style="font-size:0.85rem; color:#666; text-align:center; margin:5px 0;">No messages yet. Say something!</p>'}
+                            </div>
+                            <div style="display: flex; gap: 5px;">
+                                <input type="text" id="comment-input-${t.id}" placeholder="e.g. im on my way..." style="margin:0; padding:8px; font-size:0.9rem;" />
+                                <button onclick="postComment(${t.id})" class="action-btn" style="margin:0; width: auto; padding: 8px 12px; background: var(--green); color: black;">Send</button>
+                            </div>
+                        </div>
                     </div>
                 </div>`;
             }).join('');
@@ -197,16 +280,6 @@
             `).join('');
         }
 
-        function renderProfile() {
-            if (pollingData.user_stats) {
-                document.getElementById('profile-banner').classList.remove('hidden');
-                document.getElementById('prof-name').innerText = currentUsername;
-                document.getElementById('prof-rank').innerText = "#" + pollingData.user_stats.rank;
-                document.getElementById('prof-pts').innerText = pollingData.user_stats.points;
-                document.getElementById('prof-wl').innerText = pollingData.user_stats.wl_ratio;
-            }
-        }
-
         function fetchData() {
             fetch('/api/status').then(r => r.json()).then(data => {
                 pollingData = data;
@@ -216,12 +289,79 @@
             });
         }
 
+        function postComment(tableId) {
+            if (!currentUsername) {
+                alert("Please set a username first!");
+                return;
+            }
+            const input = document.getElementById(`comment-input-${tableId}`);
+            const message = input.value.trim();
+            if (!message) return;
+
+            fetch(`/table/${tableId}/comment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            }).then(res => {
+                if (res.ok) {
+                    input.value = '';
+                    fetchData(); // Refresh poll data immediately
+                }
+            });
+        }
+
+        function voteComment(commentId, voteType) {
+            if (!currentUsername) {
+                alert("Please set a username first!");
+                return;
+            }
+
+            fetch(`/comment/${commentId}/vote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vote_type: voteType })
+            }).then(res => {
+                if (res.ok) {
+                    fetchData();
+                }
+            });
+        }
+
+        // Update renderProfile to populate the user's comment history list
+        function renderProfile() {
+            if (pollingData.user_stats) {
+                document.getElementById('main-navbar').classList.remove('hidden');
+                document.getElementById('nav-prof-name').innerText = currentUsername;
+                document.getElementById('modal-prof-name').innerText = currentUsername;
+                document.getElementById('prof-rank').innerText = "#" + pollingData.user_stats.rank;
+                document.getElementById('prof-pts').innerText = pollingData.user_stats.points;
+                document.getElementById('prof-wl').innerText = pollingData.user_stats.wl_ratio;
+
+                const comList = document.getElementById('prof-comments-list');
+                const comments = pollingData.user_stats.comments || [];
+                if (comments.length === 0) {
+                    comList.innerHTML = '<p style="text-align:center; color:#666;">No comments posted yet.</p>';
+                } else {
+                    comList.innerHTML = comments.map(c => `
+                        <div style="background: #151515; padding: 8px; border-radius: 4px; margin-bottom: 6px; border: 1px solid var(--border);">
+                            <div style="display:flex; justify-content:space-between; color:#777; font-size:0.75rem; margin-bottom:2px;">
+                                <span style="color:var(--blue);">${c.table_location}</span>
+                                <span>${c.time}</span>
+                            </div>
+                            <div style="color:var(--txt);">${c.message}</div>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+
         fetchData();
         let pollTimer;
 
         function startPolling() {
             if (!pollTimer) {
-                fetchData(); // Fetch immediately on focus
+                fetchData();
                 pollTimer = setInterval(fetchData, 15000);
             }
         }
@@ -231,7 +371,6 @@
             pollTimer = null;
         }
 
-        // Listen for the user locking their phone or switching tabs
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") {
                 startPolling();
@@ -240,7 +379,6 @@
             }
         });
 
-        // Initial load
         startPolling();
     </script>
 </body>

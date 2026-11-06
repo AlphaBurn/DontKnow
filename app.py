@@ -5,7 +5,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from models import db, TableStatus, AnonymousPing, User, TableAttendee, UserGameStat, UniqueLocation, UniqueGame
+from models import db, TableStatus, AnonymousPing, User, TableAttendee, UserGameStat, UniqueLocation, UniqueGame, CommentVote, TableComment
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-fallback-key')
@@ -82,6 +82,30 @@ def get_status():
     for t in TableStatus.query.filter_by(is_active=True).all():
         present = [a.user.username for a in t.attendees if a.status == 'present']
         interested = [a.user.username for a in t.attendees if a.status == 'interested']
+        
+        # Serialize comments for this table
+        comments_data = []
+        for c in sorted(t.comments, key=lambda x: x.timestamp):
+            likes = sum(1 for v in c.votes if v.vote_type == 'like')
+            dislikes = sum(1 for v in c.votes if v.vote_type == 'dislike')
+            user_vote = None
+            if username:
+                user_obj = User.query.filter_by(username=username).first()
+                if user_obj:
+                    v_record = CommentVote.query.filter_by(comment_id=c.id, user_id=user_obj.id).first()
+                    if v_record:
+                        user_vote = v_record.vote_type
+            
+            comments_data.append({
+                'id': c.id,
+                'username': c.user.username,
+                'message': c.message,
+                'time': c.timestamp.strftime('%H:%M'),
+                'likes': likes,
+                'dislikes': dislikes,
+                'user_vote': user_vote
+            })
+
         tables_data.append({
             'id': t.id,
             'location': t.location,
@@ -90,7 +114,8 @@ def get_status():
             'ongoing_game': t.ongoing_game,
             'match_state': t.match_state,
             'present': present,
-            'interested': interested
+            'interested': interested,
+            'comments': comments_data
         })
         
     # 2. Global & Segmented Leaderboards
@@ -114,9 +139,71 @@ def get_status():
         if user:
             rank = next((i+1 for i, u in enumerate(ldb["Global"]) if u['username'] == username), "-")
             wl_ratio = round(user.wins / user.losses, 2) if user.losses > 0 else user.wins
-            user_stats = {'rank': rank, 'points': user.points, 'wl_ratio': wl_ratio}
+            
+            # Fetch user's recent comments
+            recent_comments = [{
+                'id': c.id,
+                'table_location': c.table.location,
+                'message': c.message,
+                'time': c.timestamp.strftime('%Y-%m-%d %H:%M')
+            } for c in sorted(user.comments, key=lambda x: x.timestamp, reverse=True)[:10]]
+            
+            user_stats = {
+                'rank': rank, 
+                'points': user.points, 
+                'wl_ratio': wl_ratio,
+                'comments': recent_comments
+            }
             
     return jsonify({'tables': tables_data, 'leaderboards': ldb, 'user_stats': user_stats})
+
+
+@app.route('/table/<int:table_id>/comment', methods=['POST'])
+def post_comment(table_id):
+    username = session.get('username')
+    if not username:
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    data = request.get_json()
+    message = data.get('message', '').strip()
+    if not message:
+        return jsonify({"error": "Empty message"}), 400
+        
+    user = User.query.filter_by(username=username).first()
+    table = TableStatus.query.get_or_404(table_id)
+    
+    new_comment = TableComment(table_id=table.id, user_id=user.id, message=message)
+    db.session.add(new_comment)
+    db.session.commit()
+    
+    return jsonify({"status": "success"})
+
+@app.route('/comment/<int:comment_id>/vote', methods=['POST'])
+def vote_comment(comment_id):
+    username = session.get('username')
+    if not username:
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.get_json()
+    vote_type = data.get('vote_type') # 'like' or 'dislike'
+    if vote_type not in ['like', 'dislike']:
+        return jsonify({"error": "Invalid vote type"}), 400
+        
+    user = User.query.filter_by(username=username).first()
+    existing_vote = CommentVote.query.filter_by(comment_id=comment_id, user_id=user.id).first()
+    
+    if existing_vote:
+        if existing_vote.vote_type == vote_type:
+            # Toggle off if clicking the same button twice
+            db.session.delete(existing_vote)
+        else:
+            # Switch vote type
+            existing_vote.vote_type = vote_type
+    else:
+        db.session.add(CommentVote(comment_id=comment_id, user_id=user.id, vote_type=vote_type))
+        
+    db.session.commit()
+    return jsonify({"status": "success"})
 
 @app.route('/join_table/<int:table_id>', methods=['POST'])
 def join_table(table_id):
@@ -244,7 +331,10 @@ def search_users():
     return jsonify([u.username for u in users])
 
 
-
+@app.route('/user_logout', methods=['GET'])
+def user_logout():
+    session.pop('username', None)
+    return redirect(url_for('index'))
 
 
 
