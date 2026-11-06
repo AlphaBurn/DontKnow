@@ -217,7 +217,31 @@
         }
 
         fetchData();
-        setInterval(fetchData, 15000);
+        let pollTimer;
+
+        function startPolling() {
+            if (!pollTimer) {
+                fetchData(); // Fetch immediately on focus
+                pollTimer = setInterval(fetchData, 15000);
+            }
+        }
+
+        function stopPolling() {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+
+        // Listen for the user locking their phone or switching tabs
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") {
+                startPolling();
+            } else {
+                stopPolling();
+            }
+        });
+
+        // Initial load
+        startPolling();
     </script>
 </body>
 </html>
