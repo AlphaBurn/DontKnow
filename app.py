@@ -8,6 +8,7 @@ from flask_limiter.util import get_remote_address
 from models import db, TableStatus, AnonymousPing, User, TableAttendee, UserGameStat, UniqueLocation, UniqueGame, CommentVote, TableComment
 import calendar
 from datetime import timedelta
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-fallback-key')
@@ -17,6 +18,7 @@ app.config['ADMIN_PASSWORD'] = os.getenv('ADMIN_PASSWORD', 'taekno')
 
 db.init_app(app)
 limiter = Limiter(get_remote_address, app=app, default_limits=["500 per day"])
+migrate = Migrate(app, db)
 
 with app.app_context():
     db.create_all()
