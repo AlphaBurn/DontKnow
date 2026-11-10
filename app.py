@@ -7,6 +7,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from models import db, TableStatus, AnonymousPing, User, TableAttendee, UserGameStat, UniqueLocation, UniqueGame, CommentVote, TableComment
 import calendar
+from datetime import timedelta
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-fallback-key')
@@ -42,6 +43,24 @@ def calculate_points(n_players, placement):
         return int(raw_score + 0.5) if raw_score > 0 else int(raw_score - 0.5)
     return int(raw_score)
 
+
+
+def process_table_expirations():
+    now = datetime.utcnow()
+    expired_threshold = now - timedelta(hours=2)
+    
+    # Find active tables whose end_time was over 2 hours ago and weren't toggled to remain active
+    stale_tables = TableStatus.query.filter(
+        TableStatus.is_active == True,
+        TableStatus.end_time < expired_threshold,
+        TableStatus.remain_active == False
+    ).all()
+    
+    for t in stale_tables:
+        t.is_active = False
+    if stale_tables:
+        db.session.commit()
+
 # --- PUBLIC ROUTES & APIs ---
 @app.route('/')
 def index():
@@ -76,6 +95,7 @@ def search_autocomplete(resource):
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
+    process_table_expirations()
     username = session.get('username')
     tables_data = []
     
@@ -118,11 +138,23 @@ def get_status():
             'interested': interested,
             'comments': comments_data
         })
-        
-    # 2. Global & Segmented Leaderboards
+    page = request.args.get('page', 1, type=int)
+    per_page = 15
+    
     ldb = {"Global": []}
-    for u in User.query.order_by(User.points.desc(), User.wins.desc()).all():
+    total_pages = 1
+
+    if page == 0:
+        global_users = User.query.order_by(User.points.desc(), User.wins.desc()).all()
+    else:
+        pagination = User.query.order_by(User.points.desc(), User.wins.desc()).paginate(page=page, per_page=per_page, error_out=False)
+        global_users = pagination.items
+        total_pages = pagination.pages
+
+    for u in global_users:
         ldb["Global"].append({'username': u.username, 'wins': u.wins, 'losses': u.losses, 'points': u.points})
+
+    
         
     for stat in UserGameStat.query.all():
         if stat.game_name not in ldb: ldb[stat.game_name] = []
@@ -138,10 +170,18 @@ def get_status():
     if username:
         user = User.query.filter_by(username=username).first()
         if user:
-            rank = next((i+1 for i, u in enumerate(ldb["Global"]) if u['username'] == username), "-")
+            # OPTIMIZATION: Calculate absolute rank directly from the DB.
+            # This is 100% accurate even if the user isn't on the current paginated list.
+            higher_ranked_count = User.query.filter(
+                db.or_(
+                    User.points > user.points,
+                    db.and_(User.points == user.points, User.wins > user.wins)
+                )
+            ).count()
+            absolute_rank = higher_ranked_count + 1
+            
             wl_ratio = round(user.wins / user.losses, 2) if user.losses > 0 else user.wins
             
-            # Fetch user's recent comments
             recent_comments = [{
                 'id': c.id,
                 'table_location': c.table.location,
@@ -150,13 +190,62 @@ def get_status():
             } for c in sorted(user.comments, key=lambda x: x.timestamp, reverse=True)[:10]]
             
             user_stats = {
-                'rank': rank, 
+                'rank': absolute_rank, 
                 'points': user.points, 
                 'wl_ratio': wl_ratio,
                 'comments': recent_comments
             }
             
-    return jsonify({'tables': tables_data, 'leaderboards': ldb, 'user_stats': user_stats})
+    return jsonify({
+        'tables': tables_data, 
+        'leaderboards': ldb, 
+        'user_stats': user_stats,
+        'current_page': page if page > 0 else 1,
+        'total_pages': total_pages
+    })
+
+@app.route('/admin/table/<int:table_id>/edit', methods=['POST'])
+@login_required
+def edit_table(table_id):
+    table = TableStatus.query.get_or_404(table_id)
+    
+    # Parse datetimes (datetime-local format: YYYY-MM-DDTHH:MM)
+    start_date_str = request.form.get('start_time')
+    end_date_str = request.form.get('end_time')
+    if start_date_str:
+        table.start_time = datetime.strptime(start_date_str.replace("T", " ")[:16], "%Y-%m-%d %H:%M")
+    if end_date_str:
+        table.end_time = datetime.strptime(end_date_str.replace("T", " ")[:16], "%Y-%m-%d %H:%M")
+        
+    host_name = request.form.get('host_name', table.host_name).strip()
+    location_name = request.form.get('location', table.location).strip()
+    game_name = request.form.get('ongoing_game', table.ongoing_game).strip()
+    
+    # Handle dictionary additions if they are new
+    if host_name:
+        host_user = User.query.filter_by(username=host_name).first()
+        if not host_user:
+            host_user = User(username=host_name)
+            db.session.add(host_user)
+            db.session.flush()
+        table.host_name = host_name
+        
+        # Ensure the new host is listed as present
+        if not TableAttendee.query.filter_by(table_id=table.id, user_id=host_user.id).first():
+            db.session.add(TableAttendee(table_id=table.id, user_id=host_user.id, status='present'))
+            
+    if location_name:
+        if not UniqueLocation.query.filter_by(name=location_name).first():
+            db.session.add(UniqueLocation(name=location_name))
+        table.location = location_name
+        
+    if game_name:
+        if not UniqueGame.query.filter_by(name=game_name).first():
+            db.session.add(UniqueGame(name=game_name))
+        table.ongoing_game = game_name
+        
+    db.session.commit()
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/table/<int:table_id>/comment', methods=['POST'])
@@ -353,17 +442,42 @@ def manage_attendee(att_id, action):
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
+
+
 @app.route('/admin/table/<int:table_id>/manual_add', methods=['POST'])
 @login_required
 def manual_add(table_id):
-    user_id = request.form.get('user_id')
-    if user_id:
-        existing = TableAttendee.query.filter_by(table_id=table_id, user_id=user_id).first()
+    username = request.form.get('username', '').strip()
+    if username:
+        # Check if user exists, otherwise create them automatically
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            user = User(username=username)
+            db.session.add(user)
+            db.session.commit()
+            
+        existing = TableAttendee.query.filter_by(table_id=table_id, user_id=user.id).first()
         if not existing:
-            db.session.add(TableAttendee(table_id=table_id, user_id=user_id, status='present'))
+            db.session.add(TableAttendee(table_id=table_id, user_id=user.id, status='present'))
         else:
             existing.status = 'present'
         db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    
+    # Clean up related dependencies to prevent foreign key constraint failures
+    TableAttendee.query.filter_by(user_id=user.id).delete()
+    UserGameStat.query.filter_by(user_id=user.id).delete()
+    CommentVote.query.filter_by(user_id=user.id).delete()
+    for comment in TableComment.query.filter_by(user_id=user.id).all():
+        db.session.delete(comment)
+        
+    db.session.delete(user)
+    db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
 
@@ -372,6 +486,29 @@ def manual_add(table_id):
 def close_table(table_id):
     table = TableStatus.query.get_or_404(table_id)
     table.is_active = False
+    db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/user/delete_by_username', methods=['POST'])
+@login_required
+def delete_user_by_username():
+    username = request.form.get('username', '').strip()
+    user = User.query.filter_by(username=username).first()
+    if user:
+        TableAttendee.query.filter_by(user_id=user.id).delete()
+        UserGameStat.query.filter_by(user_id=user.id).delete()
+        CommentVote.query.filter_by(user_id=user.id).delete()
+        for comment in TableComment.query.filter_by(user_id=user.id).all():
+            db.session.delete(comment)
+        db.session.delete(user)
+        db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/table/<int:table_id>/toggle_remain', methods=['POST'])
+@login_required
+def toggle_remain(table_id):
+    table = TableStatus.query.get_or_404(table_id)
+    table.remain_active = not table.remain_active
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 

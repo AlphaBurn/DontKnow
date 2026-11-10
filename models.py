@@ -35,6 +35,7 @@ class TableStatus(db.Model):
     __tablename__ = 'table_status'
     id = db.Column(db.Integer, primary_key=True)
     is_active = db.Column(db.Boolean, default=True)
+    remain_active = db.Column(db.Boolean, default=False)
     location = db.Column(db.String(100), nullable=False)
     host_name = db.Column(db.String(50), nullable=False)
     start_time = db.Column(db.DateTime, nullable=False)

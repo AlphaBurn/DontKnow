@@ -37,6 +37,14 @@
             <h2>Control Panel</h2>
             <a href="/admin/logout" style="color: #aaa;">Logout</a>
         </div>
+        <div class="card">
+            <h3>Search & Delete User</h3>
+            <form method="POST" action="/admin/user/delete_by_username" onsubmit="return confirm('Permanently delete this user, their stats, and their comments?');" style="display: flex; gap: 10px;">
+                <input type="text" name="username" placeholder="Search username to delete..." list="users-delete-suggestions" oninput="fetchSuggestions('users', this.value, 'users-delete-suggestions')" autocomplete="off" required style="margin:0;">
+                <datalist id="users-delete-suggestions"></datalist>
+                <button type="submit" class="btn-danger" style="white-space: nowrap;">Delete User</button>
+            </form>
+        </div>
 
         <div class="card">
             <h3>Schedule New Table</h3>
@@ -68,11 +76,52 @@
         <div class="card" style="border-left: 4px solid var(--blue);">
             <div class="flex-row" style="border:none;">
                 <div>
-                    <h3 style="margin: 0; color: var(--green);">{{ table.location }}</h3>
-                    <div style="color: #aaa; font-size: 0.9rem;">Game: {{ table.ongoing_game }} | State: <strong>{{ table.match_state }}</strong></div>
+                    <!-- Added Gear Icon with Inline Toggle JS -->
+                    <h3 style="margin: 0; color: var(--green);">
+                        {{ table.location }} 
+                        <span style="cursor: pointer; font-size: 1rem; filter: grayscale(1); opacity: 0.7; margin-left: 5px;" onclick="document.getElementById('edit-form-{{ table.id }}').style.display = document.getElementById('edit-form-{{ table.id }}').style.display === 'none' ? 'block' : 'none';" title="Edit Table Details">⚙️</span>
+                    </h3>
+                    <div style="color: #aaa; font-size: 0.9rem;">Host: {{ table.host_name }} | Game: {{ table.ongoing_game }} | State: <strong>{{ table.match_state }}</strong></div>
+                    <div style="font-size: 0.8rem; color: {% if table.remain_active %}var(--green){% else %}#ff9800{% endif %}; margin-top: 4px;">
+                        Expiry Protection: <strong>{{ 'Enabled (Permanent)' if table.remain_active else 'Auto-destructs 2h after end' }}</strong>
+                    </div>
                 </div>
-                <form method="POST" action="/admin/table/{{ table.id }}/close">
-                    <button type="submit" class="btn-danger">End & Close Table</button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <form method="POST" action="/admin/table/{{ table.id }}/toggle_remain">
+                        <button type="submit" class="btn-small {% if table.remain_active %}btn-danger{% else %}btn-blue{% endif %}">
+                            {{ 'Disable Protection' if table.remain_active else 'Keep Active (>2h)' }}
+                        </button>
+                    </form>
+                    <form method="POST" action="/admin/table/{{ table.id }}/close">
+                        <button type="submit" class="btn-danger">End & Close Table</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Hidden Edit Form Toggled by Gear Icon -->
+            <div id="edit-form-{{ table.id }}" style="display: none; background: #111; padding: 15px; border-radius: 6px; margin: 10px 0 15px 0; border: 1px dashed var(--border);">
+                <h4 style="margin-top:0; margin-bottom: 10px; color:var(--blue);">Modify Table Details</h4>
+                <form method="POST" action="/admin/table/{{ table.id }}/edit">
+                    <input type="text" name="location" value="{{ table.location }}" list="locations-edit-{{ table.id }}" oninput="fetchSuggestions('locations', this.value, 'locations-edit-{{ table.id }}')" autocomplete="off" required style="margin-bottom:10px;">
+                    <datalist id="locations-edit-{{ table.id }}"></datalist>
+
+                    <input type="text" name="host_name" value="{{ table.host_name }}" list="users-edit-{{ table.id }}" oninput="fetchSuggestions('users', this.value, 'users-edit-{{ table.id }}')" autocomplete="off" required style="margin-bottom:10px;">
+                    <datalist id="users-edit-{{ table.id }}"></datalist>
+                    
+                    <input type="text" name="ongoing_game" value="{{ table.ongoing_game }}" list="games-edit-{{ table.id }}" oninput="fetchSuggestions('games', this.value, 'games-edit-{{ table.id }}')" autocomplete="off" required style="margin-bottom:10px;">
+                    <datalist id="games-edit-{{ table.id }}"></datalist>
+                    
+                    <div style="display: flex; gap: 10px; margin-bottom:10px;">
+                        <div style="width:50%;">
+                            <label style="font-size:0.8rem; color:#aaa;">Start Time</label>
+                            <input type="datetime-local" name="start_time" value="{{ table.start_time.strftime('%Y-%m-%dT%H:%M') }}" required style="margin: 0;">
+                        </div>
+                        <div style="width:50%;">
+                            <label style="font-size:0.8rem; color:#aaa;">End Time</label>
+                            <input type="datetime-local" name="end_time" value="{{ table.end_time.strftime('%Y-%m-%dT%H:%M') }}" required style="margin: 0;">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-blue" style="width: 100%;">Save Modifications</button>
                 </form>
             </div>
 
@@ -138,10 +187,9 @@
             </div>
 
             <form method="POST" action="/admin/table/{{ table.id }}/manual_add" style="display: flex; gap: 10px; margin-top: 15px;">
-                <!-- TODO: Fix manual add search and create-->
-                <input type="text" id="username-input" placeholder="Force Add Player from Database..." list="users-suggestions" oninput="fetchSuggestions('users', this.value)" autocomplete="off" required>
-                <datalist id="users-suggestions"></datalist>
-                <button class="action-btn" onclick="setUsername()">Save & Enter</button>
+                <input type="text" name="username" placeholder="Force Add Player (Search or Type New)..." list="users-suggestions-{{ table.id }}" oninput="fetchSuggestions('users', this.value, 'users-suggestions-{{ table.id }}')" autocomplete="off" required style="margin:0;">
+                <datalist id="users-suggestions-{{ table.id }}"></datalist>
+                <button type="submit" class="btn-small btn-green">Add</button>
             </form>
 
         </div>
@@ -150,13 +198,26 @@
     </div>
 
     <script>
-        function fetchSuggestions(resource, query) {
+        function fetchSuggestionsx(resource, query) {
             if (query.length < 2) return;
             fetch(`/api/search/${resource}?q=${query}`)
                 .then(res => res.json())
                 .then(items => {
                     const dl = document.getElementById(`${resource}-suggestions`);
                     dl.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
+                })
+                .catch(err => console.error("Autocomplete fetch error:", err));
+        }
+
+        function fetchSuggestions(resource, query, datalistId = `${resource}-suggestions`) {
+            if (query.length < 1) return;
+            fetch(`/api/search/${resource}?q=${query}`)
+                .then(res => res.json())
+                .then(items => {
+                    const dl = document.getElementById(datalistId);
+                    if (dl) {
+                        dl.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
+                    }
                 })
                 .catch(err => console.error("Autocomplete fetch error:", err));
         }

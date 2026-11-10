@@ -1,10 +1,6 @@
 import requests
 
-for i in range(500):
-
-    cookies = {
-        'session': 'eyJ1c2VybmFtZSI6InRlc3QxMiJ9.avLicA.9bIx2sijgjmMp-Qp5Kaj7smXK_o',
-    }
+for i in range(13, 60):
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0',
@@ -25,4 +21,4 @@ for i in range(500):
         'username': f"stress_{i}",
     }
 
-    response = requests.post('http://10.201.73.104:5000/set_username', cookies=cookies, headers=headers, json=json_data)
+    response = requests.post('http://192.168.1.2:5000/set_username', headers=headers, json=json_data)

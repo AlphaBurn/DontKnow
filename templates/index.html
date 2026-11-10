@@ -264,10 +264,11 @@
             
             const activeData = pollingData.leaderboards[filter.value] || [];
             
-            lCont.innerHTML = activeData.map((u, i) => `
+            let htmlStr = activeData.map((u, i) => `
                 <div class="ldb-row">
                     <div style="display:flex; align-items:center; gap: 10px;">
-                        <span class="ldb-rank">#${i+1}</span>
+                        <!-- Adjust rank numbering based on current page -->
+                        <span class="ldb-rank">#${(currentPage - 1) * 15 + i + 1}</span>
                         <strong>${u.username}</strong>
                     </div>
                     <div style="display:flex; align-items:center; gap: 15px;">
@@ -278,15 +279,18 @@
                     </div>
                 </div>
             `).join('');
-        }
-
-        function fetchData() {
-            fetch('/api/status').then(r => r.json()).then(data => {
-                pollingData = data;
-                renderProfile();
-                renderTables();
-                renderLeaderboard();
-            });
+            
+            // Append Pagination Buttons if on the Global Leaderboard
+            if (currentSelection === "Global" && totalLdbPages > 1) {
+                htmlStr += `
+                    <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                        <button class="action-btn" style="width: 48%; background: #2a2a2a; color: white; opacity: ${currentPage === 1 ? '0.5' : '1'};" onclick="changePage(-1)" ${currentPage === 1 ? 'disabled' : ''}>⬅ Previous</button>
+                        <button class="action-btn" style="width: 48%; background: #2a2a2a; color: white; opacity: ${currentPage === totalLdbPages ? '0.5' : '1'};" onclick="changePage(1)" ${currentPage === totalLdbPages ? 'disabled' : ''}>Next ➡</button>
+                    </div>
+                `;
+            }
+            
+            lCont.innerHTML = htmlStr;
         }
 
         function postComment(tableId) {
@@ -356,13 +360,67 @@
         }
 
 
-        fetchData();
-        let pollTimer;
 
+        // Add these global state variables at the top of your script
+        let currentPage = 1;
+        let totalLdbPages = 1;
+        let ldbCache = {}; 
+        let pollCount = 0;
+
+        // Modify fetchData to accept arguments and cache pages
+        function fetchData(page = currentPage, isFullSync = false) {
+            // If isFullSync is true, we request page 0 (which the backend treats as "all")
+            const fetchPage = isFullSync ? 0 : page; 
+            
+            fetch(`/api/status?page=${fetchPage}`).then(r => r.json()).then(data => {
+                pollingData = data;
+                
+                if (isFullSync) {
+                    ldbCache['all'] = data.leaderboards["Global"];
+                } else {
+                    // Store this page's leaderboard array in the client-side cache
+                    ldbCache[page] = data.leaderboards["Global"];
+                    totalLdbPages = data.total_pages;
+                }
+                
+                renderProfile();
+                renderTables();
+                renderLeaderboard();
+            });
+        }
+
+        fetchData()
+        // Instant SPA Page Change
+        function changePage(direction) {
+            let newPage = currentPage + direction;
+            if (newPage < 1 || newPage > totalLdbPages) return;
+            
+            currentPage = newPage;
+            
+            // If we already visited this page, load instantly from local cache
+            if (ldbCache[currentPage]) {
+                pollingData.leaderboards["Global"] = ldbCache[currentPage];
+                renderLeaderboard();
+            }
+            
+            // Silently fetch in the background to ensure Tables/Comments aren't frozen
+            fetchData(currentPage);
+        }
+
+        // Modify startPolling to include the 2-minute full sync
         function startPolling() {
             if (!pollTimer) {
-                fetchData();
-                pollTimer = setInterval(fetchData, 15000);
+                fetchData(currentPage);
+                pollTimer = setInterval(() => {
+                    pollCount++;
+                    // Every 8th poll (15s * 8 = 120 seconds), fetch everything
+                    if (pollCount >= 8) {
+                        fetchData(currentPage, true);
+                        pollCount = 0;
+                    } else {
+                        fetchData(currentPage);
+                    }
+                }, 15000);
             }
         }
 
