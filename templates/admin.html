@@ -53,11 +53,11 @@
                 <div style="display: flex; gap: 10px;">
                     <div style="width:50%;">
                         <label style="font-size:0.8rem; color:#aaa;">Start Time</label>
-                        <input type="time" name="start_time" required>
+                        <input type="datetime-local" name="start_time" required>
                     </div>
                     <div style="width:50%;">
                         <label style="font-size:0.8rem; color:#aaa;">End Time</label>
-                        <input type="time" name="end_time" required>
+                        <input type="datetime-local" name="end_time" required>
                     </div>
                 </div>
                 <button type="submit" class="btn-green" style="width: 100%;">Deploy Table</button>
@@ -138,13 +138,10 @@
             </div>
 
             <form method="POST" action="/admin/table/{{ table.id }}/manual_add" style="display: flex; gap: 10px; margin-top: 15px;">
-                <select name="user_id" style="margin:0;" required>
-                    <option value="" disabled selected>Force Add Player from Database...</option>
-                    {% for u in all_users %}
-                        <option value="{{ u.id }}">{{ u.username }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="btn-small">Add</button>
+                <!-- TODO: Fix manual add search and create-->
+                <input type="text" id="username-input" placeholder="Force Add Player from Database..." list="users-suggestions" oninput="fetchSuggestions('users', this.value)" autocomplete="off" required>
+                <datalist id="users-suggestions"></datalist>
+                <button class="action-btn" onclick="setUsername()">Save & Enter</button>
             </form>
 
         </div>
@@ -154,7 +151,7 @@
 
     <script>
         function fetchSuggestions(resource, query) {
-            if (query.length < 1) return;
+            if (query.length < 2) return;
             fetch(`/api/search/${resource}?q=${query}`)
                 .then(res => res.json())
                 .then(items => {
@@ -162,6 +159,15 @@
                     dl.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
                 })
                 .catch(err => console.error("Autocomplete fetch error:", err));
+        }
+        function setUsername() {
+            const val = document.getElementById('username-input').value.trim();
+            if (!val) return;
+            fetch('/set_username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: val })
+            }).then(() => location.reload()); 
         }
     </script>
 </body>

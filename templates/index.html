@@ -61,7 +61,6 @@
     </div>
 
     <!-- User Profile Data Modal -->
-    <!-- User Profile Data Modal -->
     <div id="profile-modal" class="modal-overlay hidden">
         <div class="card" style="width: 90%; max-width: 400px; cursor: default; position: relative; max-height: 85vh; overflow-y: auto;">
             <button onclick="closeProfileModal()" style="position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: #aaa; font-size: 1.2rem; width: auto; padding: 0; cursor: pointer;">✖</button>
@@ -154,7 +153,7 @@
         }
 
         function fetchSuggestions(resource, query) {
-            if (query.length < 1) return;
+            if (query.length < 2) return;
             fetch(`/api/search/${resource}?q=${query}`)
                 .then(res => res.json())
                 .then(items => {
@@ -204,8 +203,9 @@
                     : `<button class="action-btn" style="background:var(--green); color:black;" onclick="joinTable(${t.id})">I'm Interested</button>`;
 
                 return `
-                <div class="card ${isExpanded}" onclick="toggleExpand(${t.id}, event)">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <!-- <div class="card ${isExpanded}" onclick="toggleExpand(${t.id}, event)"> -->
+                <div class="card ${isExpanded}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; ${isExpanded}" onclick="toggleExpand(${t.id}, event)">
                         <div>
                             <span class="status-pill ${statClass}">${t.timing_status}</span>
                             <h3 style="margin: 5px 0;">${t.location}</h3>

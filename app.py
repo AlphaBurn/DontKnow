@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from models import db, TableStatus, AnonymousPing, User, TableAttendee, UserGameStat, UniqueLocation, UniqueGame, CommentVote, TableComment
+import calendar
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-fallback-key')
@@ -14,7 +15,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['ADMIN_PASSWORD'] = os.getenv('ADMIN_PASSWORD', 'taekno')
 
 db.init_app(app)
-limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day"])
+limiter = Limiter(get_remote_address, app=app, default_limits=["500 per day"])
 
 with app.app_context():
     db.create_all()
@@ -105,12 +106,12 @@ def get_status():
                 'dislikes': dislikes,
                 'user_vote': user_vote
             })
-
+        month_name = calendar.month_name[int(t.start_time.strftime('%m'))]
         tables_data.append({
             'id': t.id,
             'location': t.location,
             'timing_status': get_timing_status(t.start_time, t.end_time),
-            'time_range': f"{t.start_time.strftime('%H:%M')} - {t.end_time.strftime('%H:%M')}",
+            'time_range': f"{t.start_time.strftime(f'(%d. {month_name})  :  %H:%M')} - {t.end_time.strftime(f'%H:%M')}",
             'ongoing_game': t.ongoing_game,
             'match_state': t.match_state,
             'present': present,
@@ -248,9 +249,12 @@ def admin_dashboard():
 @app.route('/admin/add_table', methods=['POST'])
 @login_required
 def add_table():
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    start_dt = datetime.strptime(f"{today} {request.form.get('start_time')}", "%Y-%m-%d %H:%M")
-    end_dt = datetime.strptime(f"{today} {request.form.get('end_time')}", "%Y-%m-%d %H:%M")
+    #today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = None
+    start_date_str = request.form.get('start_time')
+    end_date_str = request.form.get('end_time')
+    start_dt = datetime.strptime(f"{start_date_str[:10]} {start_date_str[11:16]}", "%Y-%m-%d %H:%M")
+    end_dt = datetime.strptime(f"{end_date_str[:10]} {end_date_str[11:16]}", "%Y-%m-%d %H:%M")
     
     host_name = request.form.get('host_name').strip()
     location_name = request.form.get('location').strip()
